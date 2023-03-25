@@ -6,7 +6,7 @@ ConColorMsg_t ConColorMsg;
 
 void InitLog()
 {
-	HMODULE hTier0 = GetModuleHandleW(L"tier0.dll");
+	HMODULE hTier0 = LoadLibraryExW(L"tier0.dll", NULL, 0);
 	if (!hTier0)
 		return;
 	

@@ -43,13 +43,6 @@ add_compile_definitions(STEAM_API_NODLL)
 
 add_executable(gc_proxy WIN32 ${PROXY_SRC})
 
-# minhook...
-file(GLOB_RECURSE MINHOOK_SRC ${SRC_DIR}/external/minhook/*.c)
-source_group("MinHook" FILES ${MINHOOK_SRC})
-
-target_sources(gc_proxy PRIVATE ${MINHOOK_SRC})
-target_include_directories(gc_proxy PRIVATE ${SRC_DIR}/external/minhook/include)
-
 # for protobuf
 set_property(TARGET gc_proxy PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 

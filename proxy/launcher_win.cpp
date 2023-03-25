@@ -58,6 +58,9 @@ int main(int argc, char **argv)
 	wchar_t szEngine2Path[MAX_PATH];
 	char szBaseDirUTF8[MAX_PATH];
 
+	// do this first (schizo)
+	InstallSteamProxy(szBaseDir);
+
 	if (!GetModuleFileNameW(NULL, szBaseDir, ARRAYSIZE(szBaseDir)))
 	{
 		MessageBoxW(NULL, L"GetModuleFileName failed", L"Launcher Error", MB_OK);
@@ -91,8 +94,6 @@ int main(int argc, char **argv)
 		MessageBoxW(NULL, L"Could not convert base path", L"Launcher Error", MB_OK);
 		return 1;
 	}
-
-	InstallSteamProxy(szBaseDir);
 
 	const char *szGameName = "csgo";
 

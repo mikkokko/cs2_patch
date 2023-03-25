@@ -1,9 +1,6 @@
 #include "precompiled.h"
 #include <windows.h>
 
-// remove eventually
-#include <MinHook.h>
-
 #if defined(_M_X64)
 #define STEAM_API L"steam_api64.dll"
 #else
@@ -205,18 +202,112 @@ void *Hk_SteamInternal_CreateInterface(const char *ver)
 
 //-------------------------------------
 
-// i lied, there's no eat hook (broken on x64 so temporarily using minhook)
+#define MAX_ADDRESS_OFFSET ((DWORD)~0)
+
+void *AllocateNear(void *pOrigin, size_t nSize)
+{
+	SYSTEM_INFO SystemInfo;
+	GetSystemInfo(&SystemInfo);
+
+	UINT_PTR Address = (UINT_PTR)pOrigin;
+	UINT_PTR MaxAddress = (UINT_PTR)pOrigin + MAX_ADDRESS_OFFSET;
+
+	Address -= Address % SystemInfo.dwAllocationGranularity;
+	Address += SystemInfo.dwAllocationGranularity;
+
+	while (Address <= MaxAddress)
+	{
+		MEMORY_BASIC_INFORMATION MemoryInfo;
+		if (!VirtualQuery((void *)Address, &MemoryInfo, sizeof(MemoryInfo)))
+			break;
+
+		if (MemoryInfo.State == MEM_FREE)
+		{
+			void *pBlock = VirtualAlloc((void *)Address, nSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+			if (pBlock)
+				return pBlock;
+		}
+
+		Address = (UINT_PTR)MemoryInfo.BaseAddress + MemoryInfo.RegionSize;
+
+		Address += SystemInfo.dwAllocationGranularity - 1;
+		Address -= Address % SystemInfo.dwAllocationGranularity;
+	}
+
+	return NULL;
+}
+
+void *TrampolineNear(void *pAddress, void *pDestination)
+{
+	UINT8 Payload[] =
+	{
+		0x50, // push   rax
+		0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs rax, pDestination
+		0x48, 0x87, 0x04, 0x24, // xchg  QWORD PTR [rsp], rax
+		0xc3 // ret
+	};
+
+	void* pTrampoline = AllocateNear(pAddress, sizeof(Payload));
+	if (!pTrampoline)
+		return NULL;
+
+	memcpy(&Payload[3], &pDestination, sizeof(pDestination));
+	memcpy(pTrampoline, Payload, sizeof(Payload));
+
+	return pTrampoline;
+}
+
+DWORD *FindFromEAT(uintptr_t hModule, const char *szFunction)
+{
+	IMAGE_DOS_HEADER *DosHeader = (IMAGE_DOS_HEADER *)(hModule);
+	IMAGE_NT_HEADERS *NtHeader = (IMAGE_NT_HEADERS *)(hModule + DosHeader->e_lfanew);
+	IMAGE_DATA_DIRECTORY *DataDirectory = &NtHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+	IMAGE_EXPORT_DIRECTORY *ExportDirectory = (IMAGE_EXPORT_DIRECTORY *)(hModule + DataDirectory->VirtualAddress);
+
+	DWORD *AddressOfFunctions = (DWORD *)(hModule + ExportDirectory->AddressOfFunctions);
+	DWORD *AddressOfNames = (DWORD *)(hModule + ExportDirectory->AddressOfNames);
+	WORD *AddressOfNameOrdinals = (WORD *)(hModule + ExportDirectory->AddressOfNameOrdinals);
+
+	for (DWORD i = 0; i < ExportDirectory->NumberOfFunctions; i++)
+	{
+		char *szName = (char *)(hModule + AddressOfNames[i]);
+
+		if (!strcmp(szFunction, szName))
+			return AddressOfFunctions + AddressOfNameOrdinals[i];
+	}
+
+	return NULL;
+}
+
 void InstallHookEAT(HMODULE hModule, const char *szFunction, void *pHook, void **ppOriginal)
 {
-	void *pFunction = GetProcAddress(hModule, szFunction);
-	if (!pFunction)
+	DWORD *Offset = FindFromEAT((uintptr_t)hModule, szFunction);
+	if (!Offset)
+	{
+		HardError("Could not hook %s", szFunction);
 		return;
+	}
 
-	auto result = MH_CreateHook(pFunction, pHook, ppOriginal);
-	assert(result == MH_OK);
+	uintptr_t HookOffset = (uintptr_t)pHook - (uintptr_t)hModule;
 
-	result = MH_EnableHook(pFunction);
-	assert(result == MH_OK);
+	if (HookOffset > MAX_ADDRESS_OFFSET)
+	{
+		void *pTrampoline = TrampolineNear(hModule, pHook);
+		if (!pTrampoline)
+		{
+			HardError("Could not hook %s", szFunction);
+			return;
+		}
+
+		HookOffset = (uintptr_t)pTrampoline - (uintptr_t)hModule;
+	}
+
+	*ppOriginal = (void *)(*Offset + (uintptr_t)hModule);
+
+	DWORD flOldProtect;
+	VirtualProtect(Offset, sizeof(DWORD), PAGE_READWRITE, &flOldProtect);
+	*Offset = HookOffset;
+	VirtualProtect(Offset, sizeof(DWORD), flOldProtect, &flOldProtect);
 }
 
 static HMODULE LoadSteam(const wchar_t *szBaseDir)
@@ -234,8 +325,6 @@ static HMODULE LoadSteam(const wchar_t *szBaseDir)
 
 void InstallSteamProxy(const wchar_t *szBaseDir)
 {
-	MH_Initialize();
-
 	HMODULE hSteam = LoadSteam(szBaseDir);
 	if (!hSteam)
 		HardError("Could not find Steam\n");

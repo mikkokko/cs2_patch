@@ -52,7 +52,7 @@ EXPORT int CountItemsToReport()
 
 typedef void(*Source2Main_t)(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd, const char *szBaseDir, const char *szGame);
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+int main(int argc, char **argv)
 {
 	wchar_t szBaseDir[MAX_PATH];
 	wchar_t szEngine2Path[MAX_PATH];
@@ -94,6 +94,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	InstallSteamProxy(szBaseDir);
 
-	pSource2Main(hInstance, hPrevInstance, lpCmdLine, nShowCmd, szBaseDirUTF8, "csgo");
-	return true;
+	const char *szGameName = "csgo";
+
+	// the engine does have a check for -game, however it's only considered if we pass null as game name to Source2Main
+	// even if we do that, there's no fallback game name so check for -game here and fall back to csgo if it's not present
+	for (int i = 0; i < argc; i++)
+	{
+		if (!strcmp(argv[i], "-game"))
+		{
+			if (i < argc - 1)
+				szGameName = argv[i + 1];
+			break;
+		}
+	}
+
+	pSource2Main(GetModuleHandle(NULL), NULL, GetCommandLine(), 0, szBaseDirUTF8, szGameName);
+	return 0;
 }

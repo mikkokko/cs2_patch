@@ -43,7 +43,7 @@ add_compile_definitions(STEAM_API_NODLL)
 
 add_executable(gc_proxy WIN32 ${PROXY_SRC})
 
-# minhoook...
+# minhook...
 file(GLOB_RECURSE MINHOOK_SRC ${SRC_DIR}/external/minhook/*.c)
 source_group("MinHook" FILES ${MINHOOK_SRC})
 

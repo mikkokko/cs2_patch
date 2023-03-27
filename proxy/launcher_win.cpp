@@ -9,11 +9,16 @@ void InstallSteamProxy(const wchar_t *szBaseDir); // steam_proxy.cpp
 EXPORT DWORD NvOptimusEnablement = 1;
 EXPORT int AmdPowerXpressRequestHighPerformance = 1;
 
-// these are always irrelevant apparently?
+// most of these are only called when on a valve server (see CUserMessage_DllStatus)
 
 EXPORT bool BSecureAllowed(unsigned char *a1, int a2, int a3)
 {
 	return true;
+}
+
+EXPORT int BinaryProperties_GetValue(int a1, void *a2)
+{
+	return 0;
 }
 
 EXPORT int CountFilesCompletedTrustCheck()
@@ -26,24 +31,12 @@ EXPORT int CountFilesNeedTrustCheck()
 	return 0;
 }
 
-EXPORT int GetTotalFilesLoaded()
-{
-	return 0;
-}
-
-EXPORT int RuntimeCheck(int a1, int a2)
-{
-	return 0;
-}
-
-// these are for cs2
-
-EXPORT int BinaryProperties_GetValue(int a1, void *a2)
-{
-	return 0;
-}
-
 EXPORT int CountItemsToReport()
+{
+	return 0;
+}
+
+EXPORT int GetTotalFilesLoaded()
 {
 	return 0;
 }

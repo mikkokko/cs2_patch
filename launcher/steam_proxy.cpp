@@ -54,7 +54,7 @@ public:
 		{
 			// make the gc think that this is a source 1 client
 			CMsgClientHello NewHello;
-			NewHello.set_version(1548);
+			NewHello.set_version(0);
 			NewHello.set_client_session_need(0);
 			NewHello.set_client_launcher(0);
 			NewHello.set_steam_launcher(0);
